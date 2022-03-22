@@ -1,91 +1,103 @@
-# ethash: C/C++ implementation of Ethash, the Ethereum Proof of Work algorithm.
-# Copyright 2018-2019 Pawel Bylica.
-# Licensed under the Apache License, Version 2.0.
+cmake_minimum_required(VERSION 3.21)
 
-cmake_minimum_required(VERSION 3.5)
+project(ethash LANGUAGES C CXX)
 
-if(POLICY CMP0069)
-    cmake_policy(SET CMP0069 NEW)  # Allow LTO.
-endif()
+#===============================================================================
+# cmake configuration
+#===============================================================================
+set(CMAKE_CONFIGURATION_TYPES Debug Release)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-include(cmake/cable/bootstrap.cmake)
+foreach(config ${CMAKE_CONFIGURATION_TYPES})
+  string(TOUPPER ${config} config)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config} ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endforeach()
 
-include(CableBuildType)
-include(CableCompilerSettings)
-include(CableToolchains)
-include(CMakePackageConfigHelpers)
-include(HunterGate)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-include(defaults/HunterCacheServers)
+#===============================================================================
+# compile options
+#===============================================================================
+add_library(ethash_compile_options INTERFACE)
+target_compile_features(ethash_compile_options INTERFACE c_std_11 cxx_std_17)
+target_compile_options(ethash_compile_options
+  INTERFACE
+    $<$<COMPILE_LANG_AND_ID:C,Clang,GNU>:-Wall -Werror -Wextra -pedantic -pedantic-errors>
+    $<$<COMPILE_LANG_AND_ID:C,MSVC>:/W4 /WX>
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>:-Wall -Werror -Wextra -pedantic -pedantic-errors>
+    $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/W4 /WX>)
 
-cable_configure_toolchain(DEFAULT cxx11)
-cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release RelWithDebInfo Debug)
+#===============================================================================
+# dependencies
+#===============================================================================
+add_library(ethash_dependencies INTERFACE)
+# find_package(Threads REQUIRED)
+# target_link_libraries(ethash_dependencies INTERFACE Threads::Threads)
 
-if(NOT WIN32)
-    # Outside of Windows build only Release packages.
-    set(HUNTER_CONFIGURATION_TYPES Release
-        CACHE STRING "Build type of the Hunter packages")
-endif()
+#===============================================================================
+add_library(ethash_include_directories INTERFACE)
+target_include_directories(ethash_include_directories INTERFACE include lib)
 
-HunterGate(
-    URL "https://github.com/cpp-pm/hunter/archive/v0.23.224.tar.gz"
-    SHA1 "18e57a43efc435f2e1dae1291e82e42afbf940be"
-)
+#===============================================================================
+add_library(${PROJECT_NAME}
+  STATIC
+    lib/ethash/bit_manipulation.h
+    lib/ethash/builtins.h
+    lib/ethash/endianness.hpp
+    lib/ethash/ethash-internal.hpp
+    lib/ethash/ethash.cpp
+    lib/ethash/kiss99.hpp
+    lib/ethash/managed.cpp
+    lib/ethash/primes.c
+    lib/ethash/primes.h
+    lib/ethash/progpow.cpp
+    lib/keccak/keccak.c
+    lib/keccak/keccakf1600.c
+    lib/keccak/keccakf800.c
+    lib/support/attributes.h
+    include/ethash/ethash.h
+    include/ethash/ethash.hpp
+    include/ethash/hash_types.h
+    include/ethash/hash_types.hpp
+    include/ethash/keccak.h
+    include/ethash/keccak.hpp
+    include/ethash/progpow.hpp
+    include/ethash/version.h)
+target_link_libraries(${PROJECT_NAME}
+  PRIVATE
+    ethash_compile_options
+    ethash_dependencies
+    ethash_include_directories)
 
-project(ethash)
-set(PROJECT_VERSION 0.5.2)
+#===============================================================================
+enable_testing()
 
-cable_configure_compiler(NO_STACK_PROTECTION)
-if(CABLE_COMPILER_GNULIKE)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Og")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
+option(INSTALL_GTEST "" OFF)
+add_subdirectory(deps/googletest EXCLUDE_FROM_ALL)
+set_property(TARGET gtest_main PROPERTY FOLDER deps)
+include(GoogleTest)
 
-    option(ETHASH_NATIVE "Build for native CPU" OFF)
-    if(ETHASH_NATIVE)
-        add_compile_options(-march=native)
-    endif()
-elseif(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-    # For Win32 builds allow allocating more than 2 GB of memory.
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LARGEADDRESSAWARE")
-endif()
-
-option(ETHASH_INSTALL_CMAKE_CONFIG "Install CMake configuration scripts for find_package(CONFIG)" ON)
-
-option(ETHASH_FUZZING "Build with fuzzer instrumentation" OFF)
-if(ETHASH_FUZZING)
-    set(CMAKE_EXE_LINKER_FLAGS "-fsanitize=fuzzer-no-link ${CMAKE_EXE_LINKER_FLAGS}")
-    add_compile_options(-fno-omit-frame-pointer -fsanitize=fuzzer,undefined,integer -fno-sanitize-recover=all)
-endif()
-
-set(include_dir ${PROJECT_SOURCE_DIR}/include)
-
-add_subdirectory(lib)
-
-option(ETHASH_BUILD_TESTS "Build unit tests" ON)
-if(ETHASH_BUILD_TESTS)
-    add_subdirectory(test)
-endif()
-
-
-install(
-    DIRECTORY
-    ${include_dir}/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-if(ETHASH_INSTALL_CMAKE_CONFIG)
-    write_basic_package_version_file(ethashConfigVersion.cmake COMPATIBILITY SameMajorVersion)
-    configure_package_config_file(cmake/Config.cmake.in ethashConfig.cmake INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ethash)
-
-    install(
-        EXPORT ethashTargets
-        NAMESPACE ethash::
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ethash
-    )
-    install(
-        FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/ethashConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/ethashConfigVersion.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ethash
-    )
-endif()
+add_executable(ethash_test
+  tests/helpers.hpp
+  tests/progpow_test_vectors.hpp
+  tests/test_bit_manipulation.cpp
+  tests/test_cases.hpp
+  tests/test_ethash.cpp
+  tests/test_keccak.cpp
+  tests/test_kiss.cpp
+  tests/test_managed.cpp
+  tests/test_primes.cpp
+  tests/test_progpow.cpp)
+target_link_libraries(ethash_test
+  PRIVATE
+    ${PROJECT_NAME}
+    ethash_compile_options
+    ethash_dependencies
+    ethash_include_directories
+    gtest_main)
+set_property(TARGET ethash_test PROPERTY FOLDER tests)
+gtest_add_tests(TARGET ethash_test)

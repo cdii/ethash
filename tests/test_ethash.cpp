@@ -2,9 +2,17 @@
 // Copyright 2018-2019 Pawel Bylica.
 // Licensed under the Apache License, Version 2.0.
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#elif defined(__clang__)
+#pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpedantic"
+#elif defined(_MSC_VER)
+#pragma warning(push)
 #pragma warning(disable : 4127)
+#endif
+
 
 #include <ethash/endianness.hpp>
 #include <ethash/ethash-internal.hpp>
@@ -62,7 +70,7 @@ hash512 copy(const hash512& h) noexcept
 {
     return h;
 }
-}
+}  // namespace
 
 TEST(ethash, revision)
 {
@@ -835,3 +843,11 @@ TEST(ethash, is_less_or_equal)
         EXPECT_EQ(is_less_or_equal(a, b), t.excected_result);
     }
 }
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif

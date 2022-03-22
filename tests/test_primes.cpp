@@ -2,8 +2,13 @@
 // Copyright 2018-2019 Pawel Bylica.
 // Licensed under the Apache License, Version 2.0.
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#elif defined(__clang__)
+#pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpedantic"
+#endif
 
 #include <ethash/primes.h>
 
@@ -64,3 +69,9 @@ TEST(primes, find_largest_prime_edge_cases)
     EXPECT_EQ(ethash_find_largest_prime(6), 5);
     EXPECT_EQ(ethash_find_largest_prime(7), 7);
 }
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(__clang__)
+#pragma clang diagnostic pop
+#endif
