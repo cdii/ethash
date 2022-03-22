@@ -22,9 +22,7 @@ namespace ethash
 constexpr static int light_cache_init_size = 1 << 24;
 constexpr static int light_cache_growth = 1 << 17;
 constexpr static int light_cache_rounds = 3;
-constexpr static int full_dataset_init_size = 1 << 30;
 constexpr static int full_dataset_growth = 1 << 23;
-constexpr static int full_dataset_item_parents = 256;
 
 // Verify constants:
 static_assert(sizeof(hash512) == ETHASH_LIGHT_CACHE_ITEM_SIZE, "");
@@ -128,14 +126,15 @@ void build_light_cache(
     }
 }
 
-epoch_context_full* create_epoch_context(
-    build_light_cache_fn build_fn, int epoch_number, bool full) noexcept
+epoch_context_full* create_epoch_context(build_light_cache_fn build_fn, int epoch_number, bool full,
+    int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
     static_assert(sizeof(epoch_context_full) < sizeof(hash512), "epoch_context too big");
     static constexpr size_t context_alloc_size = sizeof(hash512);
 
     const int light_cache_num_items = calculate_light_cache_num_items(epoch_number);
-    const int full_dataset_num_items = calculate_full_dataset_num_items(epoch_number);
+    const int full_dataset_num_items =
+        calculate_full_dataset_num_items(epoch_number, full_dataset_init_size);
     const size_t light_cache_size = get_light_cache_size(light_cache_num_items);
     const size_t full_dataset_size =
         full ? static_cast<size_t>(full_dataset_num_items) * sizeof(hash1024) :
@@ -156,14 +155,9 @@ epoch_context_full* create_epoch_context(
 
     hash1024* full_dataset = full ? reinterpret_cast<hash1024*>(l1_cache) : nullptr;
 
-    epoch_context_full* const context = new (alloc_data) epoch_context_full{
-        epoch_number,
-        light_cache_num_items,
-        light_cache,
-        l1_cache,
-        full_dataset_num_items,
-        full_dataset,
-    };
+    epoch_context_full* const context = new (alloc_data) epoch_context_full{epoch_number,
+        light_cache_num_items, light_cache, l1_cache, full_dataset_num_items,
+        full_dataset_init_size, full_dataset_item_parents, full_dataset};
 
     auto* full_dataset_2048 = reinterpret_cast<hash2048*>(l1_cache);
     for (uint32_t i = 0; i < progpow::l1_cache_size / sizeof(full_dataset_2048[0]); ++i)
@@ -209,7 +203,7 @@ struct item_state
 hash512 calculate_dataset_item_512(const epoch_context& context, int64_t index) noexcept
 {
     item_state item0{context, index};
-    for (uint32_t j = 0; j < full_dataset_item_parents; ++j)
+    for (uint32_t j = 0; j < static_cast<uint32_t>(context.full_dataset_item_parents); ++j)
         item0.update(j);
     return item0.final();
 }
@@ -223,7 +217,7 @@ hash1024 calculate_dataset_item_1024(const epoch_context& context, uint32_t inde
     item_state item0{context, int64_t(index) * 2};
     item_state item1{context, int64_t(index) * 2 + 1};
 
-    for (uint32_t j = 0; j < full_dataset_item_parents; ++j)
+    for (uint32_t j = 0; j < static_cast<uint32_t>(context.full_dataset_item_parents); ++j)
     {
         item0.update(j);
         item1.update(j);
@@ -239,7 +233,7 @@ hash2048 calculate_dataset_item_2048(const epoch_context& context, uint32_t inde
     item_state item2{context, int64_t(index) * 4 + 2};
     item_state item3{context, int64_t(index) * 4 + 3};
 
-    for (uint32_t j = 0; j < full_dataset_item_parents; ++j)
+    for (uint32_t j = 0; j < static_cast<uint32_t>(context.full_dataset_item_parents); ++j)
     {
         item0.update(j);
         item1.update(j);
@@ -376,13 +370,13 @@ int ethash_calculate_light_cache_num_items(int epoch_number) noexcept
     return num_items;
 }
 
-int ethash_calculate_full_dataset_num_items(int epoch_number) noexcept
+int ethash_calculate_full_dataset_num_items(int epoch_number, int full_dataset_init_size) noexcept
 {
     static constexpr int item_size = sizeof(hash1024);
-    static constexpr int num_items_init = full_dataset_init_size / item_size;
+    const int num_items_init = full_dataset_init_size / item_size;
     static constexpr int num_items_growth = full_dataset_growth / item_size;
-    static_assert(full_dataset_init_size % item_size == 0,
-        "full_dataset_init_size not multiple of item size");
+    assert(full_dataset_init_size % item_size == 0 &&
+           "full_dataset_init_size not multiple of item size");
     static_assert(
         full_dataset_growth % item_size == 0, "full_dataset_growth not multiple of item size");
 
@@ -391,14 +385,18 @@ int ethash_calculate_full_dataset_num_items(int epoch_number) noexcept
     return num_items;
 }
 
-epoch_context* ethash_create_epoch_context(int epoch_number) noexcept
+epoch_context* ethash_create_epoch_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
-    return generic::create_epoch_context(build_light_cache, epoch_number, false);
+    return generic::create_epoch_context(
+        build_light_cache, epoch_number, false, full_dataset_init_size, full_dataset_item_parents);
 }
 
-epoch_context_full* ethash_create_epoch_context_full(int epoch_number) noexcept
+epoch_context_full* ethash_create_epoch_context_full(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
-    return generic::create_epoch_context(build_light_cache, epoch_number, true);
+    return generic::create_epoch_context(
+        build_light_cache, epoch_number, true, full_dataset_init_size, full_dataset_item_parents);
 }
 
 void ethash_destroy_epoch_context_full(epoch_context_full* context) noexcept

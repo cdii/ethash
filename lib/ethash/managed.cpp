@@ -38,7 +38,8 @@ thread_local std::shared_ptr<epoch_context_full> thread_local_context_full;
 ///
 /// @todo: Redesign to guarantee deallocation before new allocation.
 ATTRIBUTE_NOINLINE
-void update_local_context(int epoch_number)
+void update_local_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents)
 {
     // Release the shared pointer of the obsoleted context.
     thread_local_context.reset();
@@ -52,14 +53,16 @@ void update_local_context(int epoch_number)
         shared_context.reset();
 
         // Build new context.
-        shared_context = create_epoch_context(epoch_number);
+        shared_context =
+            create_epoch_context(epoch_number, full_dataset_init_size, full_dataset_item_parents);
     }
 
     thread_local_context = shared_context;
 }
 
 ATTRIBUTE_NOINLINE
-void update_local_context_full(int epoch_number)
+void update_local_context_full(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents)
 {
     // Release the shared pointer of the obsoleted context.
     thread_local_context_full.reset();
@@ -73,27 +76,30 @@ void update_local_context_full(int epoch_number)
         shared_context_full.reset();
 
         // Build new context.
-        shared_context_full = create_epoch_context_full(epoch_number);
+        shared_context_full = create_epoch_context_full(
+            epoch_number, full_dataset_init_size, full_dataset_item_parents);
     }
 
     thread_local_context_full = shared_context_full;
 }
 }  // namespace
 
-const ethash_epoch_context* ethash_get_global_epoch_context(int epoch_number) noexcept
+const ethash_epoch_context* ethash_get_global_epoch_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
     // Check if local context matches epoch number.
     if (!thread_local_context || thread_local_context->epoch_number != epoch_number)
-        update_local_context(epoch_number);
+        update_local_context(epoch_number, full_dataset_init_size, full_dataset_item_parents);
 
     return thread_local_context.get();
 }
 
-const ethash_epoch_context_full* ethash_get_global_epoch_context_full(int epoch_number) noexcept
+const ethash_epoch_context_full* ethash_get_global_epoch_context_full(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
     // Check if local context matches epoch number.
     if (!thread_local_context_full || thread_local_context_full->epoch_number != epoch_number)
-        update_local_context_full(epoch_number);
+        update_local_context_full(epoch_number, full_dataset_init_size, full_dataset_item_parents);
 
     return thread_local_context_full.get();
 }

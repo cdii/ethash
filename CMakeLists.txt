@@ -78,15 +78,18 @@ enable_testing()
 
 option(INSTALL_GTEST "" OFF)
 add_subdirectory(deps/googletest EXCLUDE_FROM_ALL)
+set_property(TARGET gtest PROPERTY FOLDER deps)
 set_property(TARGET gtest_main PROPERTY FOLDER deps)
 include(GoogleTest)
 
 add_executable(ethash_test
+  tests/firopow_test_vectors.hpp
   tests/helpers.hpp
   tests/progpow_test_vectors.hpp
   tests/test_bit_manipulation.cpp
   tests/test_cases.hpp
   tests/test_ethash.cpp
+  tests/test_firopow.cpp
   tests/test_keccak.cpp
   tests/test_kiss.cpp
   tests/test_managed.cpp

@@ -24,7 +24,7 @@ TEST(progpow, revision)
 
 TEST(progpow, l1_cache)
 {
-    auto& context = get_ethash_epoch_context_0();
+    auto& context = get_ethash_epoch_context_0<progpow::progpow_traits>();
 
     constexpr auto test_size = 20;
     std::array<uint32_t, test_size> cache_slice;
@@ -40,9 +40,9 @@ TEST(progpow, l1_cache)
 
 TEST(progpow, hash_empty)
 {
-    auto& context = get_ethash_epoch_context_0();
+    auto& context = get_ethash_epoch_context_0<progpow::progpow_traits>();
 
-    const auto result = progpow::hash(context, 0, {}, 0);
+    const auto result = progpow::hash<progpow::progpow_traits>(context, 0, {}, 0);
     const auto mix_hex = "f4ac202715ded4136e72887c39e63a4738331c57fd9eb79f6ec421c281aa8743";
     const auto final_hex = "b3bad9ca6f7c566cf0377d1f8cce29d6516a96562c122d924626281ec948ef02";
     EXPECT_EQ(to_hex(result.mix_hash), mix_hex);
@@ -56,9 +56,11 @@ TEST(progpow, hash_30000)
         to_hash256("ffeeddccbbaa9988776655443322110000112233445566778899aabbccddeeff");
     const uint64_t nonce = 0x123456789abcdef0;
 
-    auto context = ethash::create_epoch_context(ethash::get_epoch_number(block_number));
+    auto context = ethash::create_epoch_context<progpow::progpow_traits>(
+        ethash::get_epoch_number<progpow::progpow_traits>(block_number));
 
-    const auto result = progpow::hash(*context, block_number, header, nonce);
+    const auto result =
+        progpow::hash<progpow::progpow_traits>(*context, block_number, header, nonce);
     const auto mix_hex = "6018c151b0f9895ebe44a4ca6ce2829e5ba6ae1a68a4ccd05a67ac01219655c1";
     const auto final_hex = "34d8436444aa5c61761ce0bcce0f11401df2eace77f5c14ba7039b86b5800c08";
     EXPECT_EQ(to_hex(result.mix_hash), mix_hex);
@@ -71,29 +73,30 @@ TEST(progpow, hash_and_verify)
 
     for (auto& t : progpow_hash_test_cases)
     {
-        const auto epoch_number = ethash::get_epoch_number(t.block_number);
+        const auto epoch_number = ethash::get_epoch_number<progpow::progpow_traits>(t.block_number);
         if (!context || context->epoch_number != epoch_number)
-            context = ethash::create_epoch_context(epoch_number);
+            context = ethash::create_epoch_context<progpow::progpow_traits>(epoch_number);
 
         const auto header_hash = to_hash256(t.header_hash_hex);
         const auto nonce = std::stoull(t.nonce_hex, nullptr, 16);
-        const auto result = progpow::hash(*context, t.block_number, header_hash, nonce);
+        const auto result =
+            progpow::hash<progpow::progpow_traits>(*context, t.block_number, header_hash, nonce);
         EXPECT_EQ(to_hex(result.mix_hash), t.mix_hash_hex);
         EXPECT_EQ(to_hex(result.final_hash), t.final_hash_hex);
 
-        auto success = progpow::verify(
+        auto success = progpow::verify<progpow::progpow_traits>(
             *context, t.block_number, header_hash, result.mix_hash, nonce, result.final_hash);
         EXPECT_TRUE(success);
 
         auto lower_boundary = result.final_hash;
         --lower_boundary.bytes[31];
-        auto final_failure = progpow::verify(
+        auto final_failure = progpow::verify<progpow::progpow_traits>(
             *context, t.block_number, header_hash, result.mix_hash, nonce, lower_boundary);
         EXPECT_FALSE(final_failure);
 
         auto different_mix = result.mix_hash;
         ++different_mix.bytes[7];
-        auto mix_failure = progpow::verify(
+        auto mix_failure = progpow::verify<progpow::progpow_traits>(
             *context, t.block_number, header_hash, different_mix, nonce, result.final_hash);
         EXPECT_FALSE(mix_failure);
     }
@@ -101,7 +104,9 @@ TEST(progpow, hash_and_verify)
 
 TEST(progpow, search)
 {
-    auto ctxp = ethash::create_epoch_context_full(0);
+    auto ctxp =
+        ethash::create_epoch_context_full(0, progpow::progpow_traits::full_dataset_init_size,
+            progpow::progpow_traits::full_dataset_item_parents);
     ASSERT_NE(ctxp.get(), nullptr);
     auto& ctx = *ctxp;
     auto& ctxl = reinterpret_cast<const ethash::epoch_context&>(ctx);
@@ -110,8 +115,8 @@ TEST(progpow, search)
     constexpr size_t iterations = 10;
 
     auto boundary = to_hash256("00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-    auto sr = progpow::search(ctx, 0, {}, boundary, 0, iterations);
-    auto srl = progpow::search_light(ctxl, 0, {}, boundary, 0, iterations);
+    auto sr = progpow::search<progpow::progpow_traits>(ctx, 0, {}, boundary, 0, iterations);
+    auto srl = progpow::search_light<progpow::progpow_traits>(ctxl, 0, {}, boundary, 0, iterations);
 
     EXPECT_EQ(sr.mix_hash, ethash::hash256{});
     EXPECT_EQ(sr.final_hash, ethash::hash256{});
@@ -120,8 +125,9 @@ TEST(progpow, search)
     EXPECT_EQ(sr.final_hash, srl.final_hash);
     EXPECT_EQ(sr.nonce, srl.nonce);
 
-    sr = progpow::search(ctx, 0, {}, boundary, iterations, iterations);
-    srl = progpow::search_light(ctxl, 0, {}, boundary, iterations, iterations);
+    sr = progpow::search<progpow::progpow_traits>(ctx, 0, {}, boundary, iterations, iterations);
+    srl = progpow::search_light<progpow::progpow_traits>(
+        ctxl, 0, {}, boundary, iterations, iterations);
 
     EXPECT_NE(sr.mix_hash, ethash::hash256{});
     EXPECT_NE(sr.final_hash, ethash::hash256{});
@@ -130,7 +136,7 @@ TEST(progpow, search)
     EXPECT_EQ(sr.final_hash, srl.final_hash);
     EXPECT_EQ(sr.nonce, srl.nonce);
 
-    auto r = progpow::hash(ctx, 0, {}, expected_nonce);
+    auto r = progpow::hash<progpow::progpow_traits>(ctx, 0, {}, expected_nonce);
     EXPECT_EQ(sr.final_hash, r.final_hash);
     EXPECT_EQ(sr.mix_hash, r.mix_hash);
 }
@@ -144,20 +150,20 @@ TEST(progpow, generate_hash_test_cases)
     hash256 h{};
     for (int e = 0; e < num_epochs; ++e)
     {
-        auto context = ethash::create_epoch_context(e);
+        auto context = ethash::create_epoch_context<progpow_traits>(e);
         auto block_numbers = {
-            e * epoch_length,
-            e * epoch_length + period_length - 1,
-            e * epoch_length + period_length,
-            e * epoch_length + 2 * period_length - 1,
-            (e + 1) * epoch_length - period_length,
-            (e + 1) * epoch_length - 1,
+            e * progpow_traits::epoch_length,
+            e * progpow_traits::epoch_length + progpow_traits::period_length - 1,
+            e * progpow_traits::epoch_length + progpow_traits::period_length,
+            e * progpow_traits::epoch_length + 2 * progpow_traits::period_length - 1,
+            (e + 1) * progpow_traits::epoch_length - progpow_traits::period_length,
+            (e + 1) * progpow_traits::epoch_length - 1,
         };
         for (auto b : block_numbers)
         {
             auto i = uint64_t(b);
             auto nonce = i * i * i * 977 + i * i * 997 + i * 1009;
-            auto r = hash(*context, b, h, nonce);
+            auto r = hash<progpow_traits>(*context, b, h, nonce);
 
             std::cout << "{" << b << ", \"" << to_hex(h) << "\", \"" << std::hex
                       << std::setfill('0') << std::setw(16) << nonce << std::dec << "\", \""

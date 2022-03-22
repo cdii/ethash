@@ -25,7 +25,13 @@ namespace ethash
 {
 constexpr auto revision = ETHASH_REVISION;
 
-static constexpr int epoch_length = ETHASH_EPOCH_LENGTH;
+struct ethash_traits
+{
+    static constexpr int epoch_length = 30000;
+    static constexpr int full_dataset_init_size = 1 << 30;
+    static constexpr int full_dataset_item_parents = 256;
+};
+
 static constexpr int light_cache_item_size = ETHASH_LIGHT_CACHE_ITEM_SIZE;
 static constexpr int full_dataset_item_size = ETHASH_FULL_DATASET_ITEM_SIZE;
 static constexpr int num_dataset_accesses = ETHASH_NUM_DATASET_ACCESSES;
@@ -72,9 +78,10 @@ static constexpr auto calculate_epoch_seed = ethash_calculate_epoch_seed;
 
 
 /// Calculates the epoch number out of the block number.
+template <class traits>
 inline constexpr int get_epoch_number(int block_number) noexcept
 {
-    return block_number / epoch_length;
+    return block_number / traits::epoch_length;
 }
 
 /**
@@ -109,14 +116,34 @@ using epoch_context_full_ptr =
 ///
 /// This is a wrapper for ethash_create_epoch_number C function that returns
 /// the context as a smart pointer which handles the destruction of the context.
-inline epoch_context_ptr create_epoch_context(int epoch_number) noexcept
+inline epoch_context_ptr create_epoch_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
-    return {ethash_create_epoch_context(epoch_number), ethash_destroy_epoch_context};
+    return {ethash_create_epoch_context(
+                epoch_number, full_dataset_init_size, full_dataset_item_parents),
+        ethash_destroy_epoch_context};
 }
 
+template <class traits>
+inline epoch_context_ptr create_epoch_context(int epoch_number) noexcept
+{
+    return create_epoch_context(
+        epoch_number, traits::full_dataset_init_size, traits::full_dataset_item_parents);
+}
+
+inline epoch_context_full_ptr create_epoch_context_full(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
+{
+    return {ethash_create_epoch_context_full(
+                epoch_number, full_dataset_init_size, full_dataset_item_parents),
+        ethash_destroy_epoch_context_full};
+}
+
+template <class traits>
 inline epoch_context_full_ptr create_epoch_context_full(int epoch_number) noexcept
 {
-    return {ethash_create_epoch_context_full(epoch_number), ethash_destroy_epoch_context_full};
+    return create_epoch_context_full(
+        epoch_number, traits::full_dataset_init_size, traits::full_dataset_item_parents);
 }
 
 
@@ -159,14 +186,18 @@ int find_epoch_number(const hash256& seed) noexcept;
 
 
 /// Get global shared epoch context.
+template <class traits>
 inline const epoch_context& get_global_epoch_context(int epoch_number) noexcept
 {
-    return *ethash_get_global_epoch_context(epoch_number);
+    return *ethash_get_global_epoch_context(
+        epoch_number, traits::full_dataset_init_size, traits::full_dataset_item_parents);
 }
 
 /// Get global shared epoch context with full dataset initialized.
+template <class traits>
 inline const epoch_context_full& get_global_epoch_context_full(int epoch_number) noexcept
 {
-    return *ethash_get_global_epoch_context_full(epoch_number);
+    return *ethash_get_global_epoch_context_full(
+        epoch_number, traits::full_dataset_init_size, traits::full_dataset_item_parents);
 }
 }  // namespace ethash

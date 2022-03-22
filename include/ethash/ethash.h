@@ -26,7 +26,6 @@ extern "C" {
  */
 #define ETHASH_REVISION "23"
 
-#define ETHASH_EPOCH_LENGTH 30000
 #define ETHASH_LIGHT_CACHE_ITEM_SIZE 64
 #define ETHASH_FULL_DATASET_ITEM_SIZE 128
 #define ETHASH_NUM_DATASET_ACCESSES 64
@@ -39,6 +38,8 @@ struct ethash_epoch_context
     const union ethash_hash512* const light_cache;
     const uint32_t* const l1_cache;
     const int full_dataset_num_items;
+    const int full_dataset_init_size;
+    const int full_dataset_item_parents;
 };
 
 
@@ -73,7 +74,7 @@ int ethash_calculate_light_cache_num_items(int epoch_number) NOEXCEPT;
  * @param epoch_number  The epoch number.
  * @return              The number items in the full dataset.
  */
-int ethash_calculate_full_dataset_num_items(int epoch_number) NOEXCEPT;
+int ethash_calculate_full_dataset_num_items(int epoch_number, int full_dataset_init_size) NOEXCEPT;
 
 /**
  * Calculates the epoch seed hash.
@@ -83,7 +84,8 @@ int ethash_calculate_full_dataset_num_items(int epoch_number) NOEXCEPT;
 union ethash_hash256 ethash_calculate_epoch_seed(int epoch_number) NOEXCEPT;
 
 
-struct ethash_epoch_context* ethash_create_epoch_context(int epoch_number) NOEXCEPT;
+struct ethash_epoch_context* ethash_create_epoch_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) NOEXCEPT;
 
 /**
  * Creates the epoch context with the full dataset initialized.
@@ -96,7 +98,8 @@ struct ethash_epoch_context* ethash_create_epoch_context(int epoch_number) NOEXC
  * @param epoch_number  The epoch number.
  * @return  Pointer to the context or null in case of memory allocation failure.
  */
-struct ethash_epoch_context_full* ethash_create_epoch_context_full(int epoch_number) NOEXCEPT;
+struct ethash_epoch_context_full* ethash_create_epoch_context_full(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) NOEXCEPT;
 
 void ethash_destroy_epoch_context(struct ethash_epoch_context* context) NOEXCEPT;
 
@@ -106,13 +109,14 @@ void ethash_destroy_epoch_context_full(struct ethash_epoch_context_full* context
 /**
  * Get global shared epoch context.
  */
-const struct ethash_epoch_context* ethash_get_global_epoch_context(int epoch_number) NOEXCEPT;
+const struct ethash_epoch_context* ethash_get_global_epoch_context(
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) NOEXCEPT;
 
 /**
  * Get global shared epoch context with full dataset initialized.
  */
 const struct ethash_epoch_context_full* ethash_get_global_epoch_context_full(
-    int epoch_number) NOEXCEPT;
+    int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) NOEXCEPT;
 
 
 struct ethash_result ethash_hash(const struct ethash_epoch_context* context,

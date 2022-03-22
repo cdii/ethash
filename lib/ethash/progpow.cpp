@@ -255,11 +255,12 @@ mix_array init_mix(uint64_t seed)
     return mix;
 }
 
+template <class traits>
 hash256 hash_mix(
     const epoch_context& context, int block_number, uint64_t seed, lookup_fn lookup) noexcept
 {
     auto mix = init_mix(seed);
-    mix_rng_state state{uint64_t(block_number / period_length)};
+    mix_rng_state state{uint64_t(block_number / traits::period_length)};
 
     for (uint32_t i = 0; i < 64; ++i)
         round(context, i, mix, state, lookup);
@@ -284,15 +285,69 @@ hash256 hash_mix(
 }
 }  // namespace
 
+hash256 hash_seed(const hash256& header_hash, uint64_t nonce) noexcept
+{
+    nonce = le::uint64(nonce);
+    uint32_t state[25] = {0x0};
+
+    for (int i = 0; i < 8; ++i)
+    {
+        state[i] = le::uint32(header_hash.word32s[i]);
+    }
+    std::memcpy(&state[8], &nonce, sizeof(uint64_t));
+    state[10] = 0x00000001;
+    state[18] = 0x80008081;
+
+    ethash_keccakf800(state);
+
+    hash256 output;
+    for (int i = 0; i < 8; ++i)
+    {
+        output.word32s[i] = le::uint32(state[i]);
+    }
+    return output;
+}
+
+hash256 hash_final(const hash256& seed_hash, const hash256& mix_hash) noexcept
+{
+    uint32_t state[25] = {0x0};
+    std::memcpy(&state[0], seed_hash.bytes, sizeof(hash256));
+    std::memcpy(&state[8], mix_hash.bytes, sizeof(hash256));
+    state[17] = 0x00000001;
+    state[24] = 0x80008081;
+
+    ethash_keccakf800(state);
+
+    hash256 output;
+    std::memcpy(output.bytes, &state[0], sizeof(hash256));
+    return output;
+}
+
+template <class traits>
 result hash(const epoch_context& context, int block_number, const hash256& header_hash,
     uint64_t nonce) noexcept
 {
     const uint64_t seed = keccak_progpow_64(header_hash, nonce);
-    const hash256 mix_hash = hash_mix(context, block_number, seed, calculate_dataset_item_2048);
+    const hash256 mix_hash =
+        hash_mix<traits>(context, block_number, seed, calculate_dataset_item_2048);
     const hash256 final_hash = keccak_progpow_256(header_hash, seed, mix_hash);
     return {final_hash, mix_hash};
 }
 
+
+template <>
+result hash<firopow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept
+{
+    const hash256 seed_hash = hash_seed(header_hash, nonce);
+    const uint64_t seed = seed_hash.word64s[0];
+    const hash256 mix_hash =
+        hash_mix<firopow_traits>(context, block_number, seed, calculate_dataset_item_2048);
+    const hash256 final_hash = hash_final(seed_hash, mix_hash);
+    return {final_hash, mix_hash};
+}
+
+template <class traits>
 result hash(const epoch_context_full& context, int block_number, const hash256& header_hash,
     uint64_t nonce) noexcept
 {
@@ -310,11 +365,36 @@ result hash(const epoch_context_full& context, int block_number, const hash256& 
     };
 
     const uint64_t seed = keccak_progpow_64(header_hash, nonce);
-    const hash256 mix_hash = hash_mix(context, block_number, seed, lazy_lookup);
+    const hash256 mix_hash = hash_mix<traits>(context, block_number, seed, lazy_lookup);
     const hash256 final_hash = keccak_progpow_256(header_hash, seed, mix_hash);
     return {final_hash, mix_hash};
 }
 
+template <>
+result hash<firopow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept
+{
+    static const auto lazy_lookup = [](const epoch_context& ctx, uint32_t index) noexcept {
+        auto* full_dataset_1024 = static_cast<const epoch_context_full&>(ctx).full_dataset;
+        auto* full_dataset_2048 = reinterpret_cast<hash2048*>(full_dataset_1024);
+        hash2048& item = full_dataset_2048[index];
+        if (item.word64s[0] == 0)
+        {
+            // TODO: Copy elision here makes it thread-safe?
+            item = calculate_dataset_item_2048(ctx, index);
+        }
+
+        return item;
+    };
+
+    const hash256 seed_hash = hash_seed(header_hash, nonce);
+    const uint64_t seed = seed_hash.word64s[0];
+    const hash256 mix_hash = hash_mix<firopow_traits>(context, block_number, seed, lazy_lookup);
+    const hash256 final_hash = hash_final(seed_hash, mix_hash);
+    return {final_hash, mix_hash};
+}
+
+template <class traits>
 bool verify(const epoch_context& context, int block_number, const hash256& header_hash,
     const hash256& mix_hash, uint64_t nonce, const hash256& boundary) noexcept
 {
@@ -324,10 +404,29 @@ bool verify(const epoch_context& context, int block_number, const hash256& heade
         return false;
 
     const hash256 expected_mix_hash =
-        hash_mix(context, block_number, seed, calculate_dataset_item_2048);
+        hash_mix<traits>(context, block_number, seed, calculate_dataset_item_2048);
     return is_equal(expected_mix_hash, mix_hash);
 }
 
+template <>
+bool verify<firopow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& mix_hash, uint64_t nonce,
+    const hash256& boundary) noexcept
+{
+    const hash256 seed_hash = hash_seed(header_hash, nonce);
+    const uint64_t seed = seed_hash.word64s[0];
+    const hash256 final_hash = hash_final(seed_hash, mix_hash);
+
+    // Check boundary
+    if (!is_less_or_equal(final_hash, boundary))
+        return false;
+
+    const hash256 expected_mix_hash =
+        hash_mix<firopow_traits>(context, block_number, seed, calculate_dataset_item_2048);
+    return is_equal(expected_mix_hash, mix_hash);
+}
+
+template <class traits>
 search_result search_light(const epoch_context& context, int block_number,
     const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
     size_t iterations) noexcept
@@ -335,13 +434,14 @@ search_result search_light(const epoch_context& context, int block_number,
     const uint64_t end_nonce = start_nonce + iterations;
     for (uint64_t nonce = start_nonce; nonce < end_nonce; ++nonce)
     {
-        result r = hash(context, block_number, header_hash, nonce);
+        result r = hash<traits>(context, block_number, header_hash, nonce);
         if (is_less_or_equal(r.final_hash, boundary))
             return {r, nonce};
     }
     return {};
 }
 
+template <class traits>
 search_result search(const epoch_context_full& context, int block_number,
     const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
     size_t iterations) noexcept
@@ -349,11 +449,49 @@ search_result search(const epoch_context_full& context, int block_number,
     const uint64_t end_nonce = start_nonce + iterations;
     for (uint64_t nonce = start_nonce; nonce < end_nonce; ++nonce)
     {
-        result r = hash(context, block_number, header_hash, nonce);
+        result r = hash<traits>(context, block_number, header_hash, nonce);
         if (is_less_or_equal(r.final_hash, boundary))
             return {r, nonce};
     }
     return {};
 }
+
+template result hash<progpow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template result hash<progpow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template bool verify<progpow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& mix_hash, uint64_t nonce,
+    const hash256& boundary) noexcept;
+
+template search_result search_light<progpow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+template search_result search<progpow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+/*
+template result hash<firopow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template result hash<firopow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template bool verify<firopow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& mix_hash, uint64_t nonce,
+    const hash256& boundary) noexcept;
+*/
+
+template search_result search_light<firopow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+template search_result search<firopow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
 
 }  // namespace progpow

@@ -20,8 +20,10 @@ extern "C" struct ethash_epoch_context_full : ethash_epoch_context
     ethash_hash1024* full_dataset;
 
     constexpr ethash_epoch_context_full(int epoch, int light_num_items, const ethash_hash512* light,
-        const uint32_t* l1, int dataset_num_items, ethash_hash1024* dataset) noexcept
-      : ethash_epoch_context{epoch, light_num_items, light, l1, dataset_num_items},
+        const uint32_t* l1, int dataset_num_items, int full_dataset_init_size,
+        int full_dataset_item_parents, ethash_hash1024* dataset) noexcept
+      : ethash_epoch_context{epoch, light_num_items, light, l1, dataset_num_items,
+            full_dataset_init_size, full_dataset_item_parents},
         full_dataset{dataset}
     {}
 };
@@ -59,8 +61,8 @@ using build_light_cache_fn = void (*)(hash512 cache[], int num_items, const hash
 void build_light_cache(
     hash_fn_512 hash_fn, hash512 cache[], int num_items, const hash256& seed) noexcept;
 
-epoch_context_full* create_epoch_context(
-    build_light_cache_fn build_fn, int epoch_number, bool full) noexcept;
+epoch_context_full* create_epoch_context(build_light_cache_fn build_fn, int epoch_number, bool full,
+    int full_dataset_init_size, int full_dataset_item_parents) noexcept;
 
 }  // namespace generic
 

@@ -61,7 +61,9 @@ epoch_context_ptr create_epoch_context_mock(int epoch_number)
         light_cache_num_items,
         light_cache,
         nullptr,
-        calculate_full_dataset_num_items(epoch_number),
+        calculate_full_dataset_num_items(epoch_number, ethash_traits::full_dataset_init_size),
+        ethash_traits::full_dataset_init_size,
+        ethash_traits::full_dataset_item_parents,
     };
     return {context, ethash_destroy_epoch_context};
 }
@@ -76,7 +78,7 @@ TEST(ethash, revision)
 {
     static_assert(ethash::revision[0] == '2', "");
     static_assert(ethash::revision[1] == '3', "");
-    EXPECT_EQ(ethash::revision, "23");
+    // EXPECT_EQ(ethash::revision, "23");
     EXPECT_EQ(ethash::revision, (std::string{"23"}));
 }
 
@@ -186,7 +188,8 @@ TEST(ethash, full_dataset_size)
 {
     for (const auto& t : dataset_size_test_cases)
     {
-        const int num_items = calculate_full_dataset_num_items(t.epoch_number);
+        const int num_items =
+            calculate_full_dataset_num_items(t.epoch_number, ethash_traits::full_dataset_init_size);
         const uint64_t size = get_full_dataset_size(num_items);
         EXPECT_EQ(size, t.full_dataset_size) << "epoch: " << t.epoch_number;
     }
@@ -320,13 +323,13 @@ TEST(ethash_multithreaded, find_epoch_number_sequential)
 
 TEST(ethash, get_epoch_number)
 {
-    EXPECT_EQ(get_epoch_number(0), 0);
-    EXPECT_EQ(get_epoch_number(1), 0);
-    EXPECT_EQ(get_epoch_number(29999), 0);
-    EXPECT_EQ(get_epoch_number(30000), 1);
-    EXPECT_EQ(get_epoch_number(30001), 1);
-    EXPECT_EQ(get_epoch_number(30002), 1);
-    EXPECT_EQ(get_epoch_number(5000000), 166);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(0), 0);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(1), 0);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(29999), 0);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(30000), 1);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(30001), 1);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(30002), 1);
+    EXPECT_EQ(get_epoch_number<ethash_traits>(5000000), 166);
 }
 
 TEST(ethash, light_cache)
@@ -345,7 +348,7 @@ TEST(ethash, light_cache)
 
     for (const auto& t : test_cases)
     {
-        auto context = create_epoch_context(t.epoch_number);
+        auto context = create_epoch_context<ethash_traits>(t.epoch_number);
         const uint8_t* const light_cache_data = context->light_cache[0].bytes;
         const size_t light_cache_size =
             static_cast<size_t>(context->light_cache_num_items) * sizeof(context->light_cache[0]);
@@ -524,7 +527,7 @@ TEST(ethash, dataset_items_epoch13)
 
 
     // Create example epoch context.
-    const auto context = create_epoch_context(13);
+    const auto context = create_epoch_context<ethash_traits>(13);
 
     for (const auto& t : test_cases)
     {
@@ -540,14 +543,15 @@ TEST(ethash, verify_hash_light)
 
     for (const auto& t : hash_test_cases)
     {
-        const int epoch_number = t.block_number / epoch_length;
+        const int epoch_number = t.block_number / ethash_traits::epoch_length;
         const uint64_t nonce = std::stoull(t.nonce_hex, nullptr, 16);
         const hash256 header_hash = to_hash256(t.header_hash_hex);
         const hash256 mix_hash = to_hash256(t.mix_hash_hex);
         const hash256 boundary = to_hash256(t.final_hash_hex);
 
         if (!context || context->epoch_number != epoch_number)
-            context = create_epoch_context(epoch_number);
+            context = create_epoch_context(epoch_number, ethash_traits::full_dataset_init_size,
+                ethash_traits::full_dataset_item_parents);
 
         result r = hash(*context, header_hash, nonce);
         EXPECT_EQ(to_hex(r.final_hash), t.final_hash_hex);
@@ -576,15 +580,17 @@ TEST(ethash, verify_hash)
 
     for (const auto& t : hash_test_cases)
     {
-        const int epoch_number = t.block_number / epoch_length;
+        const int epoch_number = t.block_number / ethash_traits::epoch_length;
         const uint64_t nonce = std::stoull(t.nonce_hex, nullptr, 16);
         const hash256 header_hash = to_hash256(t.header_hash_hex);
 
-        const int full_dataset_num_items = calculate_full_dataset_num_items(epoch_number);
+        const int full_dataset_num_items =
+            calculate_full_dataset_num_items(epoch_number, ethash_traits::full_dataset_init_size);
         const uint64_t full_dataset_size = get_full_dataset_size(full_dataset_num_items);
 
         if (!context || context->epoch_number != epoch_number)
-            context = create_epoch_context_full(epoch_number);
+            context = create_epoch_context_full(epoch_number, ethash_traits::full_dataset_init_size,
+                ethash_traits::full_dataset_item_parents);
 
         if (sizeof(void*) == 4)
         {
@@ -605,7 +611,7 @@ TEST(ethash, verify_hash)
 
 TEST(ethash, verify_final_hash_only)
 {
-    auto& context = get_ethash_epoch_context_0();
+    auto& context = get_ethash_epoch_context_0<ethash_traits>();
     const hash256 header_hash = {};
     const hash256 mix_hash = {};
     uint64_t nonce = 3221208;
@@ -618,7 +624,7 @@ TEST(ethash, verify_final_hash_only)
 
 TEST(ethash, verify_boundary)
 {
-    auto& context = get_ethash_epoch_context_0();
+    auto& context = get_ethash_epoch_context_0<ethash_traits>();
     hash256 example_header_hash =
         to_hash256("e74e5e8688d3c6f17885fa5e64eb6718046b57895a2a24c593593070ab71f5fd");
     uint64_t nonce = 6666;
@@ -766,14 +772,16 @@ TEST(ethash, create_context_oom)
 {
     static constexpr int epoch = arch64bit ? 3000 : 300;
     static constexpr size_t expected_size = arch64bit ? 26239565696 : 3590324096;
-    const int num_items = calculate_full_dataset_num_items(epoch);
+    const int num_items =
+        calculate_full_dataset_num_items(epoch, ethash_traits::full_dataset_init_size);
     const uint64_t full_dataset_size = get_full_dataset_size(num_items);
     const size_t size = static_cast<size_t>(full_dataset_size);
     ASSERT_EQ(size, full_dataset_size);
     ASSERT_EQ(size, expected_size);
 
     ASSERT_TRUE(set_memory_limit(1024 * 1024 * 1024));
-    auto* context = ethash_create_epoch_context_full(epoch);
+    auto* context = ethash_create_epoch_context_full(
+        epoch, ethash_traits::full_dataset_init_size, ethash_traits::full_dataset_item_parents);
     ASSERT_TRUE(restore_memory_limit());
     EXPECT_EQ(context, nullptr);
 }

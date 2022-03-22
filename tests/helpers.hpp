@@ -47,8 +47,9 @@ inline bool operator!=(const ethash::hash256& a, const ethash::hash256& b) noexc
     return !(a == b);
 }
 
+template <class traits>
 inline const ethash::epoch_context& get_ethash_epoch_context_0() noexcept
 {
-    static ethash::epoch_context_ptr context = ethash::create_epoch_context(0);
+    static ethash::epoch_context_ptr context = ethash::create_epoch_context<traits>(0);
     return *context;
 }
