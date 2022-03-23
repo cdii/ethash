@@ -174,30 +174,6 @@ inline void random_merge(uint32_t& a, uint32_t b, uint32_t selector) noexcept
     }
 }
 
-static const uint32_t round_constants[22] = {
-    0x00000001,
-    0x00008082,
-    0x0000808A,
-    0x80008000,
-    0x0000808B,
-    0x80000001,
-    0x80008081,
-    0x00008009,
-    0x0000008A,
-    0x00000088,
-    0x80008009,
-    0x8000000A,
-    0x8000808B,
-    0x0000008B,
-    0x00008089,
-    0x00008003,
-    0x00008002,
-    0x00000080,
-    0x0000800A,
-    0x8000000A,
-    0x80008081,
-    0x00008080,
-};
 
 static const uint32_t ravencoin_kawpow[15] = {
     0x00000072,  // R

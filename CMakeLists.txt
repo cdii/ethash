@@ -32,13 +32,6 @@ target_compile_options(ethash_compile_options
     $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/W4 /WX>)
 
 #===============================================================================
-# dependencies
-#===============================================================================
-add_library(ethash_dependencies INTERFACE)
-# find_package(Threads REQUIRED)
-# target_link_libraries(ethash_dependencies INTERFACE Threads::Threads)
-
-#===============================================================================
 add_library(ethash_include_directories INTERFACE)
 target_include_directories(ethash_include_directories INTERFACE include lib)
 
@@ -70,7 +63,6 @@ add_library(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     ethash_compile_options
-    ethash_dependencies
     ethash_include_directories)
 
 #===============================================================================
@@ -103,7 +95,6 @@ target_link_libraries(ethash_test
   PRIVATE
     ${PROJECT_NAME}
     ethash_compile_options
-    ethash_dependencies
     ethash_include_directories
     gtest_main)
 set_property(TARGET ethash_test PROPERTY FOLDER tests)

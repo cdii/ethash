@@ -104,9 +104,7 @@ TEST(progpow, hash_and_verify)
 
 TEST(progpow, search)
 {
-    auto ctxp =
-        ethash::create_epoch_context_full(0, progpow::progpow_traits::full_dataset_init_size,
-            progpow::progpow_traits::full_dataset_item_parents);
+    auto ctxp = ethash::create_epoch_context_full<progpow::progpow_traits>(0);
     ASSERT_NE(ctxp.get(), nullptr);
     auto& ctx = *ctxp;
     auto& ctxl = reinterpret_cast<const ethash::epoch_context&>(ctx);

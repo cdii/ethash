@@ -550,8 +550,7 @@ TEST(ethash, verify_hash_light)
         const hash256 boundary = to_hash256(t.final_hash_hex);
 
         if (!context || context->epoch_number != epoch_number)
-            context = create_epoch_context(epoch_number, ethash_traits::full_dataset_init_size,
-                ethash_traits::full_dataset_item_parents);
+            context = create_epoch_context<ethash_traits>(epoch_number);
 
         result r = hash(*context, header_hash, nonce);
         EXPECT_EQ(to_hex(r.final_hash), t.final_hash_hex);
@@ -589,8 +588,7 @@ TEST(ethash, verify_hash)
         const uint64_t full_dataset_size = get_full_dataset_size(full_dataset_num_items);
 
         if (!context || context->epoch_number != epoch_number)
-            context = create_epoch_context_full(epoch_number, ethash_traits::full_dataset_init_size,
-                ethash_traits::full_dataset_item_parents);
+            context = create_epoch_context_full<ethash_traits>(epoch_number);
 
         if (sizeof(void*) == 4)
         {
