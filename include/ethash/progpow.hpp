@@ -30,6 +30,13 @@ struct firopow_traits : progpow_traits
     static constexpr int period_length = 1;
 };
 
+struct kawpow_traits : progpow_traits
+{
+    static constexpr int epoch_length = 7500;
+    static constexpr int full_dataset_item_parents = 512;
+    static constexpr int period_length = 3;
+};
+
 /// The ProgPoW algorithm revision implemented as specified in the spec
 /// https://github.com/ifdefelse/ProgPOW#change-history.
 constexpr auto revision = "0.9.3";
