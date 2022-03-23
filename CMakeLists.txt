@@ -87,6 +87,7 @@ add_executable(ethash_test
   tests/helpers.hpp
   tests/kawpow_test_vectors.hpp
   tests/progpow_test_vectors.hpp
+  tests/seropow_test_vectors.hpp
   tests/test_bit_manipulation.cpp
   tests/test_cases.hpp
   tests/test_ethash.cpp
@@ -96,7 +97,8 @@ add_executable(ethash_test
   tests/test_kiss.cpp
   tests/test_managed.cpp
   tests/test_primes.cpp
-  tests/test_progpow.cpp)
+  tests/test_progpow.cpp
+  tests/test_seropow.cpp)
 target_link_libraries(ethash_test
   PRIVATE
     ${PROJECT_NAME}

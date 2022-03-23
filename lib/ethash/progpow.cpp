@@ -221,6 +221,7 @@ using lookup_fn = hash2048 (*)(const epoch_context&, uint32_t);
 
 using mix_array = std::array<std::array<uint32_t, num_regs>, num_lanes>;
 
+template <class traits>
 void round(
     const epoch_context& context, uint32_t r, mix_array& mix, mix_rng_state state, lookup_fn lookup)
 {
@@ -229,13 +230,14 @@ void round(
     const hash2048 item = lookup(context, item_index);
 
     constexpr size_t num_words_per_lane = sizeof(item) / (sizeof(uint32_t) * num_lanes);
-    constexpr int max_operations =
-        num_cache_accesses > num_math_operations ? num_cache_accesses : num_math_operations;
+    constexpr int max_operations = traits::num_cache_accesses > traits::num_math_operations ?
+                                       traits::num_cache_accesses :
+                                       traits::num_math_operations;
 
     // Process lanes.
     for (int i = 0; i < max_operations; ++i)
     {
-        if (i < num_cache_accesses)  // Random access to cached memory.
+        if (i < traits::num_cache_accesses)  // Random access to cached memory.
         {
             const auto src = state.next_src();
             const auto dst = state.next_dst();
@@ -247,7 +249,7 @@ void round(
                 random_merge(mix[l][dst], le::uint32(context.l1_cache[offset]), sel);
             }
         }
-        if (i < num_math_operations)  // Random math.
+        if (i < traits::num_math_operations)  // Random math.
         {
             // Generate 2 unique source indexes.
             const auto src_rnd = state.rng() % (num_regs * (num_regs - 1));
@@ -315,7 +317,7 @@ hash256 hash_mix(
     mix_rng_state state{uint64_t(block_number / traits::period_length)};
 
     for (uint32_t i = 0; i < 64; ++i)
-        round(context, i, mix, state, lookup);
+        round<traits>(context, i, mix, state, lookup);
 
     // Reduce mix data to a single per-lane result.
     uint32_t lane_hash[num_lanes];
@@ -717,6 +719,7 @@ search_result search(const epoch_context_full& context, int block_number,
     return {};
 }
 
+
 template result hash<progpow_traits>(const epoch_context& context, int block_number,
     const hash256& header_hash, uint64_t nonce) noexcept;
 
@@ -735,17 +738,6 @@ template search_result search<progpow_traits>(const epoch_context_full& context,
     const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
     size_t iterations) noexcept;
 
-/*
-template result hash<firopow_traits>(const epoch_context& context, int block_number,
-    const hash256& header_hash, uint64_t nonce) noexcept;
-
-template result hash<firopow_traits>(const epoch_context_full& context, int block_number,
-    const hash256& header_hash, uint64_t nonce) noexcept;
-
-template bool verify<firopow_traits>(const epoch_context& context, int block_number,
-    const hash256& header_hash, const hash256& mix_hash, uint64_t nonce,
-    const hash256& boundary) noexcept;
-*/
 
 template search_result search_light<firopow_traits>(const epoch_context& context, int block_number,
     const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
@@ -755,4 +747,31 @@ template search_result search<firopow_traits>(const epoch_context_full& context,
     const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
     size_t iterations) noexcept;
 
+
+template search_result search_light<kawpow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+template search_result search<kawpow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+
+template result hash<seropow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template result hash<seropow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, uint64_t nonce) noexcept;
+
+template bool verify<seropow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& mix_hash, uint64_t nonce,
+    const hash256& boundary) noexcept;
+
+template search_result search_light<seropow_traits>(const epoch_context& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
+
+template search_result search<seropow_traits>(const epoch_context_full& context, int block_number,
+    const hash256& header_hash, const hash256& boundary, uint64_t start_nonce,
+    size_t iterations) noexcept;
 }  // namespace progpow

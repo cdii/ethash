@@ -19,6 +19,8 @@ using namespace ethash;  // Include ethash namespace.
 
 struct progpow_traits : ethash_traits
 {
+    static constexpr int num_cache_accesses = 11;
+    static constexpr int num_math_operations = 18;
     static constexpr int period_length = 10;
 };
 
@@ -37,14 +39,19 @@ struct kawpow_traits : progpow_traits
     static constexpr int period_length = 3;
 };
 
+struct seropow_traits : progpow_traits
+{
+    static constexpr int num_cache_accesses = 12;
+    static constexpr int num_math_operations = 20;
+    static constexpr int period_length = 50;
+};
+
 /// The ProgPoW algorithm revision implemented as specified in the spec
 /// https://github.com/ifdefelse/ProgPOW#change-history.
 constexpr auto revision = "0.9.3";
 
 constexpr uint32_t num_regs = 32;
 constexpr size_t num_lanes = 16;
-constexpr int num_cache_accesses = 11;
-constexpr int num_math_operations = 18;
 constexpr size_t l1_cache_size = 16 * 1024;
 constexpr size_t l1_cache_num_items = l1_cache_size / sizeof(uint32_t);
 
