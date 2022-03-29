@@ -90,7 +90,8 @@ add_executable(ethash_test
   tests/test_managed.cpp
   tests/test_primes.cpp
   tests/test_progpow.cpp
-  tests/test_seropow.cpp)
+  tests/test_seropow.cpp
+  tests/test_update_local_context.cpp)
 target_link_libraries(ethash_test
   PRIVATE
     ${PROJECT_NAME}

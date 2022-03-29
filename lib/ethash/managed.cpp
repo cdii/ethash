@@ -47,7 +47,9 @@ void update_local_context(
     // Local context invalid, check the shared context.
     std::lock_guard<std::mutex> lock{shared_context_mutex};
 
-    if (!shared_context || shared_context->epoch_number != epoch_number)
+    if (!shared_context || shared_context->epoch_number != epoch_number ||
+        shared_context->full_dataset_init_size != full_dataset_init_size ||
+        shared_context->full_dataset_item_parents != full_dataset_item_parents)
     {
         // Release the shared pointer of the obsoleted context.
         shared_context.reset();
@@ -70,7 +72,9 @@ void update_local_context_full(
     // Local context invalid, check the shared context.
     std::lock_guard<std::mutex> lock{shared_context_full_mutex};
 
-    if (!shared_context_full || shared_context_full->epoch_number != epoch_number)
+    if (!shared_context_full || shared_context_full->epoch_number != epoch_number ||
+        shared_context_full->full_dataset_init_size != full_dataset_init_size ||
+        shared_context_full->full_dataset_item_parents != full_dataset_item_parents)
     {
         // Release the shared pointer of the obsoleted context.
         shared_context_full.reset();
@@ -88,7 +92,9 @@ const ethash_epoch_context* ethash_get_global_epoch_context(
     int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
     // Check if local context matches epoch number.
-    if (!thread_local_context || thread_local_context->epoch_number != epoch_number)
+    if (!thread_local_context || thread_local_context->epoch_number != epoch_number ||
+        thread_local_context->full_dataset_init_size != full_dataset_init_size ||
+        thread_local_context->full_dataset_item_parents != full_dataset_item_parents)
         update_local_context(epoch_number, full_dataset_init_size, full_dataset_item_parents);
 
     return thread_local_context.get();
@@ -98,7 +104,9 @@ const ethash_epoch_context_full* ethash_get_global_epoch_context_full(
     int epoch_number, int full_dataset_init_size, int full_dataset_item_parents) noexcept
 {
     // Check if local context matches epoch number.
-    if (!thread_local_context_full || thread_local_context_full->epoch_number != epoch_number)
+    if (!thread_local_context_full || thread_local_context_full->epoch_number != epoch_number ||
+        thread_local_context_full->full_dataset_init_size != full_dataset_init_size ||
+        thread_local_context_full->full_dataset_item_parents != full_dataset_item_parents)
         update_local_context_full(epoch_number, full_dataset_init_size, full_dataset_item_parents);
 
     return thread_local_context_full.get();
